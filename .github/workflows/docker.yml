@@ -1,0 +1,75 @@
+name: Docker build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -f docker/Dockerfile -t spotify-homeserver:ci .
+
+      - name: Start container
+        run: |
+          docker run -d --name shs --shm-size 1g \
+            -e ICECAST_SOURCE_PASSWORD=ci-src -e ICECAST_ADMIN_PASSWORD=ci-adm \
+            -e WEB_USER=admin -e WEB_PASSWORD=ci-test -e VNC_PASSWORD=ci \
+            -p 8080:8080 -p 8443:8443 -p 8000:8000 -p 6080:6080 \
+            spotify-homeserver:ci
+          for i in $(seq 1 60); do curl -fs http://127.0.0.1:8080/api/health >/dev/null && break; sleep 2; done
+
+      - name: All services running
+        run: |
+          sleep 15
+          docker exec shs supervisorctl status || true
+          curl -fs http://127.0.0.1:8080/api/health | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          bad = [s['id'] for s in d['services'] if s['state'] != 'active']
+          print('not active:', bad or 'none')
+          sys.exit(1 if bad else 0)"
+
+      - name: Icecast stream carries audio
+        run: |
+          # Spotify is not logged in on CI: feed a test tone into the "ice" sink
+          docker exec -d -u spotify -e XDG_RUNTIME_DIR=/tmp/xdg-spotify shs sh -c \
+            'ffmpeg -loglevel error -re -f lavfi -i sine=frequency=440 -t 600 -f s16le -ar 44100 -ac 2 - | pacat --raw --device=ice --format=s16le --rate=44100 --channels=2'
+          sleep 3
+          test "$(curl -s -m 3 -o /dev/null -w '%{size_download}' http://127.0.0.1:8000/aac128)" -gt 10000
+
+      - name: On-demand encoder starts
+        run: |
+          curl -fs -X POST -H 'Content-Type: application/json' -d '{"mount":"stream192"}' http://127.0.0.1:8080/api/want
+          sleep 8
+          docker exec shs supervisorctl status enc_stream192 | grep RUNNING
+          test "$(curl -s -m 3 -o /dev/null -w '%{size_download}' http://127.0.0.1:8000/stream192)" -gt 10000
+
+      - name: HTTPS login on 8443
+        run: |
+          test "$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:8443/)" = 302
+          curl -sk -o /dev/null -w '%{redirect_url}\n' -d 'user=admin&pass=wrong' https://127.0.0.1:8443/dologin | grep -q fail
+          curl -sk -c jar -o /dev/null -d 'user=admin&pass=ci-test' https://127.0.0.1:8443/dologin
+          test "$(curl -sk -b jar -o /dev/null -w '%{http_code}' https://127.0.0.1:8443/)" = 200
+          test "$(curl -sk -b jar -o /dev/null -w '%{http_code}' https://127.0.0.1:8443/novnc/vnc.html)" = 200
+          test "$(curl -sk -b jar -m 3 -o /dev/null -w '%{size_download}' https://127.0.0.1:8443/aac128)" -gt 10000
+
+      - name: Spotify window exists
+        run: docker exec -u spotify -e DISPLAY=:1 shs xdotool search --class spotify
+
+      - name: Desktop restart leaves a single audio sink
+        run: |
+          docker exec shs supervisorctl restart desktop
+          sleep 15
+          docker exec -u spotify -e XDG_RUNTIME_DIR=/tmp/xdg-spotify shs pactl list short sinks | tee sinks
+          test "$(wc -l < sinks)" = 1
+
+      - name: Container logs
+        if: always()
+        run: docker logs shs 2>&1 | tail -150

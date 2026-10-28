@@ -11,6 +11,7 @@ export ICEPW="$ICECAST_SOURCE_PASSWORD"
 
 H=/home/spotify
 chown spotify:spotify "$H"
+mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix   # Xvfb runs as non-root
 
 # Skripte an den Ort, den die Dienste erwarten
 install -o spotify -g spotify -m 755 /opt/spotify-scripts/run.sh /opt/spotify-scripts/autoplay.sh "$H/"

@@ -4,6 +4,12 @@ export QTWEBENGINE_DISABLE_SANDBOX=1
 export QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu
 export XDG_RUNTIME_DIR=/tmp/xdg-spotify
 mkdir -p -m 700 $XDG_RUNTIME_DIR
+# Leftovers from a previous start (PulseAudio and D-Bus detach and survive a service restart)
+pkill -u "$(id -u)" -x pulseaudio 2>/dev/null
+pkill -u "$(id -u)" -x dbus-daemon 2>/dev/null
+pkill -u "$(id -u)" -x Xvfb 2>/dev/null
+sleep 1
+rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
 rm -f $XDG_RUNTIME_DIR/bus
 dbus-daemon --session --address=$DBUS_SESSION_BUS_ADDRESS --fork --nopidfile
