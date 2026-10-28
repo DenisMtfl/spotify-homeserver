@@ -1,4 +1,5 @@
 import subprocess, json, os, re, shutil, time, urllib.request
+import svc as svcm
 os.environ.setdefault('XDG_RUNTIME_DIR', '/tmp/xdg-spotify')
 SVCS = ['spotify-desktop', 'spotify-enc@aac128', 'icecast2', 'spotify-player-web', 'caddy']
 NAMES = {'spotify-desktop': 'Spotify-Client', 'spotify-enc@aac128': 'Ton-Stream AAC 128 (immer an)', 'icecast2': 'Icecast',
@@ -44,9 +45,7 @@ def cpu():
 def health():
     svc = []
     for s in SVCS:
-        _, st = sh('systemctl', 'is-active', s)
-        _, since = sh('systemctl', 'show', s, '-p', 'ActiveEnterTimestamp', '--value')
-        svc.append({'id': s, 'name': NAMES[s], 'state': st, 'since': since})
+        svc.append({'id': s, 'name': NAMES[s], 'state': 'active' if svcm.is_active(s) else 'inactive', 'since': svcm.since(s)})
     mounts = []
     try:
         with urllib.request.urlopen('http://127.0.0.1:8000/status-json.xsl', timeout=3) as r:
@@ -79,7 +78,6 @@ def post(path, body):
     if path == '/api/restart':
         s = body.get('service')
         if s not in SVCS: return {'ok': False}, 400
-        subprocess.Popen(['sh', '-c', 'sleep 1; sudo -n /usr/bin/systemctl restart ' + s], start_new_session=True,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        svcm.control('restart', s, delay=1)
         return {'ok': True}, 200
     return None

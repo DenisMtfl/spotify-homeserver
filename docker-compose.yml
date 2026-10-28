@@ -1,0 +1,22 @@
+services:
+  spotify-homeserver:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: spotify-homeserver:latest
+    container_name: spotify-homeserver
+    hostname: SpotifyHomeserver        # erscheint so als Geraet in Spotify
+    platform: linux/amd64
+    restart: unless-stopped
+    env_file: .env
+    shm_size: "512m"
+    ports:
+      - "8443:8443"                    # HTTPS + Login (nur diesen Port nach aussen freigeben)
+      - "8080:8080"                    # Weboberflaeche ohne Login, nur im LAN
+      # - "8000:8000"                  # Icecast direkt (optional, nur LAN)
+      # - "6080:6080"                  # noVNC direkt (optional, nur LAN)
+    volumes:
+      - spotify-home:/home/spotify     # Spotify-Anmeldung, Login, Zertifikat, Token
+
+volumes:
+  spotify-home:

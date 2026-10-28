@@ -1,14 +1,14 @@
 # Startet Encoder bei Bedarf und stoppt sie nach Leerlauf
-import threading, time, subprocess, json, urllib.request
+import threading, time, json, urllib.request
+import svc as svcm
 ALWAYS = 'aac128'
 ONDEMAND = ['stream', 'stream192', 'stream128', 'aac192', 'aac256']
 IDLE = 90  # Sekunden ohne Hoerer und ohne Anfrage
 _last = {}
 def _sys(action, m):
-    subprocess.Popen(['sudo', '-n', '/usr/bin/systemctl', action, 'spotify-enc@' + m],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    svcm.control(action, 'spotify-enc@' + m)
 def _active(m):
-    return subprocess.run(['systemctl', 'is-active', 'spotify-enc@' + m], capture_output=True, text=True).stdout.strip() == 'active'
+    return svcm.is_active('spotify-enc@' + m)
 def _listeners():
     try:
         with urllib.request.urlopen('http://127.0.0.1:8000/status-json.xsl', timeout=3) as r:

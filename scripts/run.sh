@@ -7,7 +7,7 @@ mkdir -p -m 700 $XDG_RUNTIME_DIR
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
 rm -f $XDG_RUNTIME_DIR/bus
 dbus-daemon --session --address=$DBUS_SESSION_BUS_ADDRESS --fork --nopidfile
-pulseaudio --start --exit-idle-time=-1 --log-target=syslog
+pulseaudio --start --exit-idle-time=-1 --log-target=${PA_LOG_TARGET:-syslog}
 sleep 1
 pactl load-module module-null-sink sink_name=ice rate=44100 format=float32le channels=2 sink_properties=device.description=ice >/dev/null
 Xvfb :1 -screen 0 1280x800x24 &
