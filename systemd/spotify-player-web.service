@@ -1,0 +1,13 @@
+[Unit]
+Description=Spotify Remote web page
+After=network-online.target
+
+[Service]
+Environment=XDG_RUNTIME_DIR=/tmp/xdg-spotify
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/xdg-spotify/bus
+User=spotify
+ExecStart=/usr/bin/python3 /opt/player/server.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

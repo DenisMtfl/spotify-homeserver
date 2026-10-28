@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ger&auml;teauswahl einrichten</title>
+<style>
+body{margin:0;background:#0f1115;color:#e8eaed;font:15px/1.5 system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:24px 16px}
+h1{font-size:20px}h2{font-size:16px;margin-top:28px}
+code{background:#20242c;padding:2px 6px;border-radius:4px}
+input{width:100%;padding:9px;border-radius:8px;border:1px solid #3a404c;background:#181b22;color:#e8eaed;font:inherit}
+button{margin-top:10px;background:#1db954;color:#000;border:0;border-radius:18px;padding:8px 18px;font-weight:600;cursor:pointer}
+.ok{color:#1db954}.bad{color:#e5534b}a{color:#1db954}
+</style></head><body><main>
+<h1>Ger&auml;teauswahl einrichten</h1>
+<p>Status: <span id="s">...</span></p>
+<h2>1. Spotify-App anlegen (einmalig)</h2>
+<ol>
+<li><a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> &ouml;ffnen, mit deinem Spotify-Konto anmelden, <b>Create app</b>.</li>
+<li>Name z.&nbsp;B. <code>SpotifyHomeserver</code>, Beschreibung beliebig.</li>
+<li>Redirect URI genau so eintragen: <code>http://127.0.0.1:8080/callback</code></li>
+<li>Bei &bdquo;Which API/SDKs&ldquo; <b>Web API</b> ankreuzen, speichern.</li>
+<li>In den App-Einstellungen die <b>Client ID</b> kopieren (das Client Secret wird nicht gebraucht).</li>
+</ol>
+<h2>2. Client ID hier eintragen</h2>
+<input id="cid" placeholder="Client ID" autocomplete="off"><button id="save">Speichern</button> <span id="m"></span>
+<h2>3. Einmal anmelden</h2>
+<p>Die Anmeldung muss <b>im Spotify-Fenster auf dem Server</b> passieren (wegen der Adresse 127.0.0.1): Auf der Hauptseite das Bild einschalten, im VNC-Fenster den Browser <b>Falkon</b> &ouml;ffnen (Rechtsklick auf den Desktop &rarr; Terminal: <code>falkon http://127.0.0.1:8080/login</code>) &ndash; oder einfacher: unten auf den Knopf klicken, dann &ouml;ffnet der Server Falkon selbst im VNC-Bild.</p>
+<button id="open">Anmeldung im Server-Fenster &ouml;ffnen</button> <span id="m2"></span>
+<p><a href="/">&larr; zur&uuml;ck zur Hauptseite</a></p>
+</main>
+<script>
+function st(){fetch('/api/apistatus').then(r=>r.json()).then(d=>{const s=document.getElementById('s');s.className=d.connected?'ok':'bad';s.textContent=d.connected?'verbunden ✓':(d.client_id?'Client ID gespeichert, Anmeldung fehlt':'nicht eingerichtet')})}
+document.getElementById('save').onclick=()=>{fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:document.getElementById('cid').value})}).then(r=>r.json()).then(d=>{document.getElementById('m').textContent=d.ok?'gespeichert':(d.error||'Fehler');st()})};
+document.getElementById('open').onclick=()=>{fetch('/api/openlogin',{method:'POST'}).then(r=>r.json()).then(d=>{document.getElementById('m2').textContent=d.ok?'Falkon geöffnet – jetzt im Bild auf der Hauptseite anmelden':(d.error||'Fehler')})};
+st(); setInterval(st,4000);
+</script><script src="i18n.js"></script></body></html>

@@ -1,0 +1,15 @@
+[Unit]
+Description=Spotify desktop client with audio to Icecast
+After=network-online.target icecast2.service
+Wants=network-online.target
+
+[Service]
+User=spotify
+EnvironmentFile=/root/spotify.env
+ExecStart=/home/spotify/run.sh
+KillMode=control-group
+Restart=always
+RestartSec=8
+
+[Install]
+WantedBy=multi-user.target

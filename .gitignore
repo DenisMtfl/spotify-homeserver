@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pem
+*.env
+.weblogin.json
+.websessions.json
+.spotify_api.json
+secrets.txt

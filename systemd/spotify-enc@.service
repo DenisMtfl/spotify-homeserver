@@ -1,0 +1,15 @@
+[Unit]
+Description=Spotify Encoder %i
+After=spotify-desktop.service icecast2.service
+
+[Service]
+User=spotify
+EnvironmentFile=/root/spotify.env
+Environment=XDG_RUNTIME_DIR=/tmp/xdg-spotify
+ExecStart=/opt/player/enc.sh %i
+SuccessExitStatus=255
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

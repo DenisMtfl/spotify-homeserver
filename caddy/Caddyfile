@@ -1,0 +1,36 @@
+{
+  auto_https off
+  admin off
+}
+
+:8443 {
+  log {
+    output file /var/log/caddy/access.log
+    format console
+  }
+  tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
+  @public path /login.html /dologin /i18n.js /favicon.ico
+  @stream path /stream /stream128 /stream192 /aac128 /aac192 /aac256
+  handle @public {
+    reverse_proxy 127.0.0.1:8080
+  }
+  handle {
+    forward_auth 127.0.0.1:8080 {
+      uri /auth
+    }
+    handle_path /novnc/* {
+      reverse_proxy 127.0.0.1:6080
+    }
+    handle /websockify* {
+      reverse_proxy 127.0.0.1:6080
+    }
+    handle @stream {
+      reverse_proxy 127.0.0.1:8000 {
+        flush_interval -1
+      }
+    }
+    handle {
+      reverse_proxy 127.0.0.1:8080
+    }
+  }
+}

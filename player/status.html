@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpotifyHomeserver Status</title>
+<style>
+:root{--bg:#0f1115;--panel:#181b22;--line:#262a33;--text:#e8eaed;--muted:#9aa0a6;--ok:#1db954;--bad:#e5534b;--warn:#e8b339}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px}
+h1{font-size:19px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 8px;color:var(--muted);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card .k{color:var(--muted);font-size:12px}.card .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:6px}.bar>div{height:6px;background:var(--ok)}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+td,th{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-weight:500;font-size:12px}
+tr:last-child td{border-bottom:0}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px}
+button{background:#2a2f3a;color:var(--text);border:1px solid #3a404c;border-radius:14px;padding:4px 12px;cursor:pointer;font-size:12px}
+a{color:var(--ok)}.muted{color:var(--muted);font-size:12px}
+</style></head><body><main>
+<h1>SpotifyHomeserver &ndash; Status</h1><div class="muted" id="upd">lade...</div>
+<h2>System</h2><div class="grid" id="sys"></div>
+<h2>Dienste</h2><table><thead><tr><th>Dienst</th><th>Status</th><th>l&auml;uft seit</th><th></th></tr></thead><tbody id="svc"></tbody></table>
+<h2>Streams</h2><table><thead><tr><th>Stream</th><th>Format</th><th>H&ouml;rer</th></tr></thead><tbody id="mnt"></tbody></table>
+<p><a href="/">&larr; zur&uuml;ck zum Player</a></p>
+</main>
+<script>
+const gb=b=>(b/1073741824).toFixed(1)+' GB';
+function dur(s){s=Math.floor(s);const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return (d?d+' T ':'')+h+' h '+m+' min'}
+function card(k,v,pct){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div>'+(pct!=null?'<div class="bar"><div style="width:'+Math.min(100,pct)+'%;background:'+(pct>85?'var(--bad)':pct>65?'var(--warn)':'var(--ok)')+'"></div></div>':'')+'</div>'}
+function restart(id,name){ if(!confirm(name+' neu starten?')) return; fetch('/api/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service:id})}).then(()=>setTimeout(load,4000)) }
+function load(){
+  fetch('/api/health',{cache:'no-store'}).then(r=>r.json()).then(d=>{
+    const lp=100*parseFloat(d.load[0])/d.cpus;
+    document.getElementById('sys').innerHTML=
+      card('CPU Container', d.cpu_total+' % von '+(d.cpus*100)+' %', 100*d.cpu_total/(d.cpus*100))+
+      card('Spotify / ffmpeg CPU', Math.round(d.cpu_spotify)+' % / '+Math.round(d.cpu_ffmpeg)+' %')+
+      card('Arbeitsspeicher', gb(d.mem_used)+' / '+gb(d.mem_total), 100*d.mem_used/d.mem_total)+
+      card('Festplatte', gb(d.disk_used)+' / '+gb(d.disk_total), 100*d.disk_used/d.disk_total)+
+      card('Laufzeit Container', dur(d.uptime));
+    document.getElementById('svc').innerHTML=d.services.map(s=>{const ok=s.state==='active';return '<tr><td>'+s.name+'</td><td><span class="dot" style="background:'+(ok?'var(--ok)':'var(--bad)')+'"></span>'+(ok?'läuft':s.state)+'</td><td class="muted">'+(s.since||'')+'</td><td><button onclick="restart(\''+s.id+'\',\''+s.name+'\')">Neu starten</button></td></tr>'}).join('');
+    document.getElementById('mnt').innerHTML=d.mounts.length?d.mounts.map(m=>'<tr><td>/'+m.mount+'</td><td>'+m.type+'</td><td>'+m.listeners+'</td></tr>').join(''):'<tr><td colspan="3" class="muted">keine Streams aktiv</td></tr>';
+    document.getElementById('upd').textContent='aktualisiert '+new Date().toLocaleTimeString('de-DE');
+  }).catch(()=>{document.getElementById('upd').textContent='Server nicht erreichbar'});
+}
+load(); setInterval(load,5000);
+</script><script src="i18n.js"></script></body></html>
