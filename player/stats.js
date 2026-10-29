@@ -1,5 +1,5 @@
 (function(){
-const kb={stream128:128,stream192:192,stream:320,aac128:128,aac192:192,aac256:256};
+const kb={stream128:128,stream192:192,stream:320,aac128:128,aac192:192,aac256:256,hls:128};
 let ses=0, tot=+get('tot','0');
 const mb=document.getElementById('mb');
 function fmt(b){return b>=1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(1)+' MB'}

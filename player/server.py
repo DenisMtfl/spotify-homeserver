@@ -49,6 +49,18 @@ class H(http.server.SimpleHTTPRequestHandler):
             except Exception: return self.send_json({'error': 'fetch'}, 502)
             self.send_response(200); self.send_header('Content-Type', ct); self.send_header('Cache-Control', 'max-age=86400')
             self.send_header('Content-Length', str(len(data))); self.end_headers(); self.wfile.write(data); return
+        if u.path.startswith('/hls/'):
+            name = u.path[5:]
+            if name == 'live.m3u8': ondemand.want('hls')
+            if '/' in name or not (name == 'live.m3u8' or (name.startswith('seg') and name.endswith('.ts'))):
+                return self.send_json({'error': 'bad'}, 404)
+            try:
+                with open('/tmp/hls/' + name, 'rb') as f: data = f.read()
+            except OSError: return self.send_json({'error': 'missing'}, 404)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/vnd.apple.mpegurl' if name.endswith('.m3u8') else 'video/mp2t')
+            self.send_header('Cache-Control', 'no-store' if name.endswith('.m3u8') else 'max-age=60')
+            self.send_header('Content-Length', str(len(data))); self.end_headers(); self.wfile.write(data); return
         if u.path == '/auth':
             if webauth.valid(self.headers.get('Cookie')): return self.send_json({'ok': True})
             self.send_response(302); self.send_header('Location', '/login.html'); self.send_header('Content-Length', '0'); self.end_headers(); return

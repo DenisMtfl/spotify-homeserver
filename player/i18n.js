@@ -4,7 +4,7 @@ if(/^de\b/i.test(L)) return;            // deutscher Browser: nichts aendern
 document.documentElement.lang='en';
 const M={
  'Ton an':'Sound on','▶ Ton an':'▶ Sound on','❚❚ Ton aus':'❚❚ Sound off','Ton aus':'Sound off',
- 'verbinde...':'connecting...','Verbindung weg, neuer Versuch...':'Connection lost, retrying...',
+ 'verbinde...':'connecting...','Kompatibel (Firmennetz, HLS)':'Compatible (corporate network, HLS)','Verbindung weg, neuer Versuch...':'Connection lost, retrying...',
  'Qualität':'Quality','Lautstärke':'Volume','Gerät':'Device',
  'Geräteauswahl einrichten':'Set up device selection','Geräte nicht abrufbar':'Devices unavailable',
  'kein Gerät online':'no device online','wechsle...':'switching...','Wechsel fehlgeschlagen':'Switch failed',

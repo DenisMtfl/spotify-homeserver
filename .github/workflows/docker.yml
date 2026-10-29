@@ -60,6 +60,15 @@ jobs:
           test "$(curl -sk -b jar -o /dev/null -w '%{http_code}' https://127.0.0.1:8443/novnc/vnc.html)" = 200
           test "$(curl -sk -b jar -m 3 -o /dev/null -w '%{size_download}' https://127.0.0.1:8443/aac128)" -gt 10000
 
+      - name: HLS (corporate network mode) behind login
+        run: |
+          test "$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:8443/hls/live.m3u8)" = 302
+          curl -sk -b jar -o /dev/null https://127.0.0.1:8443/hls/live.m3u8 || true
+          sleep 12
+          curl -sk -b jar https://127.0.0.1:8443/hls/live.m3u8 | tee pl.m3u8
+          seg=$(grep '^seg' pl.m3u8 | tail -1)
+          test "$(curl -sk -b jar -o /dev/null -w '%{size_download}' https://127.0.0.1:8443/hls/$seg)" -gt 10000
+
       - name: Spotify window exists
         run: docker exec -u spotify -e DISPLAY=:1 shs xdotool search --class spotify
 
