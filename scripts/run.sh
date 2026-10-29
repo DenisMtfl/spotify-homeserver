@@ -18,6 +18,8 @@ pulseaudio --start -n --exit-idle-time=-1 --log-target=${PA_LOG_TARGET:-syslog} 
 sleep 1
 pactl load-module module-null-sink sink_name=ice rate=44100 format=float32le channels=2 sink_properties=device.description=ice >/dev/null
 pactl set-default-sink ice
+# zuletzt eingestellte Lautstaerke aus der Weboberflaeche
+[ -s "$HOME/.spotify_volume" ] && pactl set-sink-volume ice "$(cat "$HOME/.spotify_volume")%"
 Xvfb :1 -screen 0 1280x800x24 &
 sleep 2
 openbox &

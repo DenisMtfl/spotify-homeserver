@@ -16,26 +16,16 @@ def sink_input():
             m = re.search(r'Volume:[^\n]*?(\d+)%', block)
             return idx, (int(m.group(1)) if m else None)
     return None, None
-# Spotify-Lautstaerke merken: Spotify legt pro Titel einen neuen Audio-Stream an bzw. setzt die
-# Lautstaerke zurueck. Ein Hintergrund-Thread setzt den gewuenschten Wert immer wieder.
+# Lautstaerke: Regler steuert die virtuelle Soundkarte "ice" (nicht Spotifys eigenen Stream).
+# Spotify setzt seinen Stream bei jedem Titel zurueck, die Soundkarte fasst es nie an.
 VOLF = os.path.expanduser('~spotify/.spotify_volume')
 def saved_volume():
     try: return max(0, min(150, int(open(VOLF).read().strip())))
     except Exception: return None
-def _keep_volume():
-    import threading
-    def loop():
-        while True:
-            time.sleep(1)
-            try:
-                want = saved_volume()
-                if want is None: continue
-                idx, v = sink_input()
-                if idx and v is not None and v != want:
-                    sh('pactl', 'set-sink-input-volume', idx, '%d%%' % want, t=3)
-            except Exception: pass
-    threading.Thread(target=loop, daemon=True).start()
-_keep_volume()
+def sink_volume():
+    _, o = sh('pactl', 'get-sink-volume', 'ice', t=3)
+    m = re.search(r'(\d+)%', o)
+    return int(m.group(1)) if m else None
 def meminfo():
     d = {}
     for l in open('/proc/meminfo'):
@@ -86,8 +76,7 @@ def health():
 def get(path):
     if path == '/api/health': return health(), 200
     if path == '/api/volume':
-        idx, v = sink_input(); w = saved_volume()
-        return ({'volume': w if w is not None else v} if idx else {'volume': None}), 200
+        return {'volume': sink_volume()}, 200
     return None
 def post(path, body):
     if path == '/api/volume':
@@ -96,9 +85,10 @@ def post(path, body):
         try:
             with open(VOLF, 'w') as f: f.write(str(v))
         except Exception: pass
-        idx, _ = sink_input()
-        if not idx: return {'ok': True, 'volume': v, 'saved': True}, 200
-        rc, _ = sh('pactl', 'set-sink-input-volume', idx, '%d%%' % v); return {'ok': rc == 0, 'volume': v}, 200
+        rc, _ = sh('pactl', 'set-sink-volume', 'ice', '%d%%' % v)
+        idx, iv = sink_input()   # Spotifys eigenen Stream auf 100 % lassen
+        if idx and iv != 100: sh('pactl', 'set-sink-input-volume', idx, '100%')
+        return {'ok': rc == 0, 'volume': v}, 200
     if path == '/api/restart':
         s = body.get('service')
         if s not in SVCS: return {'ok': False}, 400
