@@ -1,4 +1,4 @@
-import http.server, subprocess, json, os, functools, sys, urllib.parse
+import http.server, subprocess, json, os, functools, sys, urllib.parse, re
 sys.path.insert(0, '/opt/player')
 import spotify_api as sp
 import ops
@@ -58,13 +58,12 @@ class H(http.server.SimpleHTTPRequestHandler):
             if not img: return self.send_json({'error': 'kein Bild'}, 503)
             self.send_response(200); self.send_header('Content-Type', 'image/jpeg'); self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Frame', str(n)); self.send_header('Content-Length', str(len(img))); self.end_headers(); self.wfile.write(img); return
-        if u.path.startswith('/hls/'):
-            name = u.path[5:]
-            if name == 'live.m3u8': ondemand.want('hls')
-            if '/' in name or not (name == 'live.m3u8' or (name.startswith('seg') and name.endswith('.ts'))):
-                return self.send_json({'error': 'bad'}, 404)
+        m = re.match(r'^/(hls|hls96|hls64)/(live\.m3u8|seg\d{6}\.ts)$', u.path)
+        if m:
+            mount, name = m.groups()
+            if name == 'live.m3u8': ondemand.want(mount)
             try:
-                with open('/tmp/hls/' + name, 'rb') as f: data = f.read()
+                with open('/tmp/%s/%s' % (mount, name), 'rb') as f: data = f.read()
             except OSError: return self.send_json({'error': 'missing'}, 404)
             self.send_response(200)
             self.send_header('Content-Type', 'application/vnd.apple.mpegurl' if name.endswith('.m3u8') else 'video/mp2t')

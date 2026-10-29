@@ -2,7 +2,7 @@
 import threading, time, json, urllib.request
 import svc as svcm
 ALWAYS = 'aac128'
-ONDEMAND = ['stream', 'stream192', 'stream128', 'aac192', 'aac256', 'hls']
+ONDEMAND = ['stream', 'stream192', 'stream128', 'aac192', 'aac256', 'hls', 'hls96', 'hls64']
 IDLE = 90  # Sekunden ohne Hoerer und ohne Anfrage
 _last = {}
 def _sys(action, m):
