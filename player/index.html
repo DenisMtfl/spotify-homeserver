@@ -58,4 +58,4 @@ q.onchange=()=>{ set('q',q.value); if(on) start() };
 au.addEventListener('playing',()=>st.textContent='läuft ('+label()+')');
 function again(){ if(!on) return; st.textContent='Verbindung weg, neuer Versuch...'; clearTimeout(retry); retry=setTimeout(start,3000) }
 au.addEventListener('error',again); au.addEventListener('ended',again);
-</script><script src="mobile.js"></script><script src="stats.js"></script><script src="view.js"></script><script src="lat.js"></script><script src="controls.js"></script><script src="devices.js"></script><script src="media.js"></script><script src="volume.js"></script><script src="extras.js"></script><script src="i18n.js"></script></body></html>
+</script><script src="mobile.js"></script><script src="stats.js"></script><script src="view.js"></script><script src="screen.js"></script><script src="lat.js"></script><script src="controls.js"></script><script src="devices.js"></script><script src="media.js"></script><script src="volume.js"></script><script src="extras.js"></script><script src="i18n.js"></script></body></html>

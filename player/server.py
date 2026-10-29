@@ -4,6 +4,7 @@ import spotify_api as sp
 import ops
 import webauth
 import ondemand
+import screen
 import urllib.request
 os.environ['DISPLAY'] = ':1'
 os.environ.setdefault('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/tmp/xdg-spotify/bus')
@@ -49,6 +50,14 @@ class H(http.server.SimpleHTTPRequestHandler):
             except Exception: return self.send_json({'error': 'fetch'}, 502)
             self.send_response(200); self.send_header('Content-Type', ct); self.send_header('Cache-Control', 'max-age=86400')
             self.send_header('Content-Length', str(len(data))); self.end_headers(); self.wfile.write(data); return
+        if u.path == '/api/screen':
+            if not webauth.valid(self.headers.get('Cookie')): return self.send_json({'error': 'login'}, 401)
+            try: after = int(q.get('after', ['0'])[0])
+            except ValueError: after = 0
+            n, img = screen.frame(after)
+            if not img: return self.send_json({'error': 'kein Bild'}, 503)
+            self.send_response(200); self.send_header('Content-Type', 'image/jpeg'); self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Frame', str(n)); self.send_header('Content-Length', str(len(img))); self.end_headers(); self.wfile.write(img); return
         if u.path.startswith('/hls/'):
             name = u.path[5:]
             if name == 'live.m3u8': ondemand.want('hls')
@@ -109,6 +118,11 @@ class H(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Location', '/'); self.send_header('Content-Length', '0'); self.end_headers(); return
             import time; time.sleep(1.5)
             self.send_response(303); self.send_header('Location', '/login.html?fail=1'); self.send_header('Content-Length', '0'); self.end_headers(); return
+        if u.path == '/api/input':
+            if not webauth.valid(self.headers.get('Cookie')): return self.send_json({'error': 'login'}, 401)
+            try: ok = screen.control(self.body())
+            except Exception: ok = False
+            return self.send_json({'ok': ok}, 200 if ok else 400)
         if u.path == '/api/want':
             ok = ondemand.want(str(self.body().get('mount', '')))
             return self.send_json({'ok': ok}, 200 if ok else 400)
