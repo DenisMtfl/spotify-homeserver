@@ -1,89 +1,91 @@
 # SpotifyHomeserver
 
-Der offizielle Spotify-Desktop-Client läuft auf deinem eigenen Server ohne Bildschirm. Sein Ton wird als Stream an jeden Browser geschickt. Eine Weboberfläche steuert alles: Play/Pause, vor/zurück, Cover, Fortschritt, Qualität, Lautstärke, Verzögerung, Statusseite. Das Spotify-Fenster selbst siehst und bedienst du ebenfalls im Browser.
+Runs the official Spotify desktop client headless on your own server and streams its audio to any browser. A web interface controls everything: play/pause, next/previous, cover art, progress, quality, volume, latency and a status page. You can also see and operate the Spotify window itself in the browser.
 
-Zwei Varianten mit identischem Code:
+Two variants with identical code:
 
 | | **Docker** | **Proxmox LXC / VM** |
 |---|---|---|
-| Für | Synology (x86), Unraid, TrueNAS, jeden Linux-PC | Proxmox, jede Ubuntu-24.04-Maschine |
-| Dienste | supervisord im Container | systemd |
-| Installation | `docker compose up -d --build` | `./scripts/install-lxc.sh` |
+| For | Synology (x86), Unraid, TrueNAS, any Linux PC | Proxmox, any Ubuntu 24.04 machine |
+| Services | supervisord inside the container | systemd |
+| Install | `docker compose up -d --build` | `./scripts/install-lxc.sh` |
 
-Voraussetzungen:
+Requirements:
 - **Spotify Premium.**
-- **x86_64 / amd64.** Spotify gibt es für Linux nicht als ARM-Version, ein Raspberry Pi oder ARM-NAS geht also nicht.
-- Etwa 2–3 GB RAM, 2 CPU-Kerne und 10 GB Speicher.
+- **x86_64 / amd64.** Spotify ships no ARM build for Linux, so a Raspberry Pi or an ARM NAS will not work.
+- About 2–3 GB RAM, 2 CPU cores and 10 GB of disk.
+
+The web interface is in German or English, depending on the browser language. Button names below are the English ones.
 
 ---
 
-## Inhalt
+## Contents
 
-1. [Funktionen](#funktionen)
-2. [Aufbau](#aufbau)
-3. [Installation mit Docker](#installation-mit-docker)
-4. [Installation im Proxmox-LXC](#installation-im-proxmox-lxc)
-5. [Erster Start: Spotify anmelden](#erster-start-spotify-anmelden)
-6. [Bedienung](#bedienung)
-7. [Zugriff von außen](#zugriff-von-außen)
-8. [Firmennetz und Proxy: Kompatibel-Modus](#firmennetz-und-proxy-kompatibel-modus)
-9. [Optional: Geräteauswahl (Spotify Connect)](#optional-geräteauswahl-spotify-connect)
-10. [Update](#update)
-11. [Fehlersuche](#fehlersuche)
-12. [Ports, Dateien, Sicherheit](#ports-dateien-sicherheit)
+1. [Features](#features)
+2. [Architecture](#architecture)
+3. [Install with Docker](#install-with-docker)
+4. [Install in a Proxmox LXC](#install-in-a-proxmox-lxc)
+5. [First start: log in to Spotify](#first-start-log-in-to-spotify)
+6. [Usage](#usage)
+7. [Access from the internet](#access-from-the-internet)
+8. [Corporate networks and proxies: compatible mode](#corporate-networks-and-proxies-compatible-mode)
+9. [Optional: device selection (Spotify Connect)](#optional-device-selection-spotify-connect)
+10. [Updating](#updating)
+11. [Troubleshooting](#troubleshooting)
+12. [Ports, files, security](#ports-files-security)
 
 ---
 
-## Funktionen
+## Features
 
-- **Ton im Browser**, wählbar:
-  - AAC 128 / 192 / 256 kbit/s oder MP3 128 / 192 / 320 kbit/s als Live-Stream mit unter einer Sekunde Verzögerung
-  - **Kompatibel HLS** mit 64 / 96 / 128 kbit/s für Firmennetze und Proxys
-- **Steuerung:** Play/Pause, nächster/vorheriger Titel über MPRIS (`playerctl`), mit Tastatur-Fallback
-- **Anzeige:** Titel, Interpret, Cover, Fortschritt, gemessene Verzögerung in ms, gestreamte Datenmenge
-- **Lautstärke:**
-  - im Browser
-  - für alle Hörer: Spotify-Lautstärke, bleibt bei jedem Titelwechsel erhalten
-- **Spotify-Fenster im Browser:** per noVNC; ohne WebSocket automatisch per Bild-Modus
-- **Oberfläche:**
-  - Desktop, Handy und Mini-Player
-  - Deutsch und Englisch, je nach Browsersprache
-  - Steuerung vom Sperrbildschirm, Bildschirm bleibt an
-  - Farbe passend zum Cover
-- **Statusseite:** Dienste, Streams und Hörer, CPU, RAM, Speicher, Neustart-Knöpfe
-- **Encoder nur bei Bedarf:** Nur AAC 128 läuft immer, alle anderen Formate starten beim ersten Hörer und gehen nach 90 s ohne Hörer aus
-- **Zugang von außen:** nur ein Port (8443), mit HTTPS und Login
+- **Audio in the browser**, selectable:
+  - AAC 128 / 192 / 256 kbit/s or MP3 128 / 192 / 320 kbit/s as a live stream with less than one second of latency
+  - **Compatible HLS** at 64 / 96 / 128 kbit/s for corporate networks and proxies
+- **Controls:** play/pause, next/previous track via MPRIS (`playerctl`), with a keyboard fallback
+- **Display:** title, artist, cover, progress, measured latency in ms, data streamed
+- **Volume:**
+  - per browser
+  - for all listeners: the Spotify volume, which is kept on every track change
+- **Spotify window in the browser:** via noVNC; without WebSocket it switches to an image mode automatically
+- **Interface:**
+  - desktop, mobile and mini-player layouts
+  - German and English, depending on the browser language
+  - lock-screen controls, screen stays on while playing
+  - colours taken from the cover
+- **Status page:** services, streams and listeners, CPU, RAM, disk, restart buttons
+- **Encoders on demand:** only AAC 128 runs all the time. Every other format starts with its first listener and stops after 90 s without listeners.
+- **Access from outside:** a single port (8443) with HTTPS and login
 
-## Aufbau
+## Architecture
 
 ```
-Spotify-Desktop-Client  (virtueller Bildschirm Xvfb :1, Fenstermanager openbox)
-   │  PulseAudio, virtuelle Soundkarte "ice" (44,1 kHz)
+Spotify desktop client  (virtual display Xvfb :1, window manager openbox)
+   │  PulseAudio, virtual sound card "ice" (44.1 kHz)
    ▼
-ffmpeg-Encoder (je Format einer, bei Bedarf)
+ffmpeg encoders (one per format, on demand)
    ├─► Icecast :8000   /aac128 /aac192 /aac256 /stream128 /stream192 /stream (MP3 320)
-   └─► HLS-Dateien     /hls64 /hls96 /hls   (2-Sekunden-Stücke, für Firmennetze)
+   └─► HLS files       /hls64 /hls96 /hls   (2-second segments, for corporate networks)
 
-Weboberfläche (python3, :8080)      noVNC (websockify :6080 → x11vnc :5900)
-        └──────────── Caddy :8443 (HTTPS + Login) ────────────┘
+Web interface (python3, :8080)      noVNC (websockify :6080 → x11vnc :5900)
+        └──────────── Caddy :8443 (HTTPS + login) ────────────┘
 ```
 
-| Datei | Aufgabe |
+| File | Purpose |
 |---|---|
-| `player/server.py` | Webserver und API (Steuerung, Lautstärke, HLS, Bild, Login) |
-| `player/svc.py` | Dienste starten/stoppen: systemd (LXC) oder supervisord (Docker) |
-| `player/ondemand.py` | Encoder bei Bedarf starten, nach Leerlauf stoppen |
-| `player/enc.sh` | ffmpeg-Aufruf je Format |
-| `player/screen.py` | Bild-Modus ohne WebSocket (JPEG-Bilder, Maus und Tastatur per xdotool) |
-| `scripts/run.sh` | startet D-Bus, PulseAudio, Xvfb, x11vnc, noVNC und Spotify |
-| `scripts/install-lxc.sh` | komplette Installation für LXC/VM |
-| `docker/` | Dockerfile, Startskript, supervisord-Konfiguration |
+| `player/server.py` | web server and API (controls, volume, HLS, screen, login) |
+| `player/svc.py` | starts/stops services: systemd (LXC) or supervisord (Docker) |
+| `player/ondemand.py` | starts encoders on demand, stops them when idle |
+| `player/enc.sh` | the ffmpeg command for each format |
+| `player/screen.py` | screen mode without WebSocket (JPEG frames, mouse and keyboard via xdotool) |
+| `scripts/run.sh` | starts D-Bus, PulseAudio, Xvfb, x11vnc, noVNC and Spotify |
+| `scripts/install-lxc.sh` | complete installation for LXC/VM |
+| `docker/` | Dockerfile, entrypoint, supervisord configuration |
 
 ---
 
-## Installation mit Docker
+## Install with Docker
 
-### 1. Repository holen und Passwörter setzen
+### 1. Get the repository and set passwords
 
 ```bash
 git clone https://github.com/DenisMtfl/spotify-homeserver.git
@@ -92,55 +94,55 @@ cp .env.example .env
 nano .env
 ```
 
-| Variable | Bedeutung |
+| Variable | Meaning |
 |---|---|
-| `WEB_USER`, `WEB_PASSWORD` | Login für Port 8443 (Zugang von außen) |
-| `VNC_PASSWORD` | Passwort für das Spotify-Fenster (noVNC) |
-| `ICECAST_SOURCE_PASSWORD` | internes Passwort zwischen Encodern und Icecast, beliebig lang |
-| `ICECAST_ADMIN_PASSWORD` | Icecast-Adminseite `http://<host>:8000/admin/` |
-| `TLS_EXTRA_SAN` | optional: weitere Namen für das Zertifikat, z. B. `DNS:spotify.example.org,IP:192.168.1.50` |
+| `WEB_USER`, `WEB_PASSWORD` | login for port 8443 (access from outside) |
+| `VNC_PASSWORD` | password for the Spotify window (noVNC) |
+| `ICECAST_SOURCE_PASSWORD` | internal password between the encoders and Icecast, any value |
+| `ICECAST_ADMIN_PASSWORD` | Icecast admin page `http://<host>:8000/admin/` |
+| `TLS_EXTRA_SAN` | optional: extra names for the certificate, e.g. `DNS:spotify.example.org,IP:192.168.1.50` |
 
-Alle Pflichtwerte müssen gesetzt sein, sonst startet der Container nicht und meldet, was fehlt.
+All required values must be set. Otherwise the container does not start and logs which one is missing.
 
-### 2. Bauen und starten
+### 2. Build and start
 
 ```bash
 docker compose up -d --build
-docker compose logs -f        # mit Strg+C beenden
+docker compose logs -f        # stop with Ctrl+C
 ```
 
-Der erste Build dauert einige Minuten, das Image ist etwa 2,5 GB groß. Danach weiter mit [Erster Start](#erster-start-spotify-anmelden).
+The first build takes a few minutes; the image is about 2.5 GB. Then continue with [First start](#first-start-log-in-to-spotify).
 
 ### Synology (Container Manager)
 
-1. Den Ordner mit diesem Repository auf die Synology kopieren, z. B. `/volume1/docker/spotify-homeserver`. Darin muss `docker-compose.yml` liegen.
-2. In diesem Ordner `.env.example` nach `.env` kopieren und die Passwörter eintragen. Das geht mit File Station über Kopieren und Umbenennen, dann mit dem Texteditor.
-3. **Container Manager → Projekt → Erstellen.** Pfad: den Ordner wählen. Quelle: „Vorhandene docker-compose.yml verwenden“.
-4. Erstellen. Der Build läuft, danach startet der Container automatisch.
+1. Copy this repository to the Synology, e.g. `/volume1/docker/spotify-homeserver`. The folder must contain `docker-compose.yml`.
+2. In that folder copy `.env.example` to `.env` and enter the passwords. File Station can copy and rename it; edit it with Text Editor.
+3. **Container Manager → Project → Create.** Path: choose the folder. Source: "Use existing docker-compose.yml".
+4. Create. The image is built and the container starts automatically.
 
-Nur Synology-Modelle mit Intel- oder AMD-CPU funktionieren, ARM-Modelle nicht.
+Only Synology models with an Intel or AMD CPU work, ARM models do not.
 
-### Was wo gespeichert wird
+### What is stored where
 
-| Volume | Inhalt |
+| Volume | Content |
 |---|---|
-| `spotify-home` → `/home/spotify` | Spotify-Anmeldung und Einstellungen, Web-Login, Sitzungen, Zertifikat, Lautstärke, Spotify-API-Token |
+| `spotify-home` → `/home/spotify` | Spotify login and settings, web login, sessions, certificate, volume, Spotify API tokens |
 
-Solange das Volume bleibt, bleibt auch die Spotify-Anmeldung, auch nach Update oder Neubau.
+As long as the volume exists, the Spotify login is kept, also across updates and rebuilds.
 
-### Hinweise
+### Notes
 
-- Der Gerätename in Spotify Connect ist der `hostname` aus `docker-compose.yml`, also `SpotifyHomeserver`.
-- Die Ports 8080, 8000 und 6080 sind nur fürs Heimnetz gedacht. Die Seite auf 8080 lädt Ton und Bild direkt von 8000 und 6080. Deshalb diese Ports nicht umbiegen, oder ganz über 8443 gehen.
-- Logs: `docker compose logs -f`. Ein einzelner Dienst lässt sich neu starten mit `docker exec spotify-homeserver supervisorctl restart desktop`.
+- The device name in Spotify Connect is the `hostname` from `docker-compose.yml` (`SpotifyHomeserver`).
+- Ports 8080, 8000 and 6080 are meant for the home network only. The page on 8080 loads audio and screen directly from 8000 and 6080, so keep these port numbers, or use 8443 for everything.
+- Logs: `docker compose logs -f`. Restart a single service with `docker exec spotify-homeserver supervisorctl restart desktop`.
 
 ---
 
-## Installation im Proxmox-LXC
+## Install in a Proxmox LXC
 
-### 1. Container anlegen
+### 1. Create the container
 
-In der Proxmox-Shell (Host). Die ID `151`, den Speicher `local-lvm` und die Bridge `vmbr0` an deine Umgebung anpassen:
+In the Proxmox host shell. Adjust the ID `151`, the storage `local-lvm` and the bridge `vmbr0` to your setup:
 
 ```bash
 pveam update
@@ -152,158 +154,158 @@ pct create 151 local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
 pct start 151
 ```
 
-Oder über die Weboberfläche: **CT erstellen**, dann Ubuntu 24.04, *Unprivilegiert* und bei Optionen → Features **Nesting** anhaken.
+Or in the web UI: **Create CT**, choose Ubuntu 24.04, *Unprivileged container*, and under Options → Features tick **Nesting**.
 
-Den genauen Namen der Vorlage zeigt `pveam available | grep ubuntu-24.04`. Der Hostname ist später der Gerätename in Spotify Connect.
+`pveam available | grep ubuntu-24.04` shows the exact template name. The hostname becomes the device name in Spotify Connect.
 
-### 2. Installieren
+### 2. Install
 
-Im Container (`pct enter 151`):
+Inside the container (`pct enter 151`):
 
 ```bash
 apt update && apt install -y git
 git clone https://github.com/DenisMtfl/spotify-homeserver.git /root/spotify-homeserver
 cd /root/spotify-homeserver
-WEB_USER=admin WEB_PASSWORD='dein-login-passwort' VNC_PASSWORD='dein-vnc-passwort' ./scripts/install-lxc.sh
+WEB_USER=admin WEB_PASSWORD='your-login-password' VNC_PASSWORD='your-vnc-password' ./scripts/install-lxc.sh
 ```
 
-Das Skript erledigt alles:
-- Pakete und den offiziellen Spotify-Client installieren
-- Benutzer `spotify` anlegen
-- Dateien an ihren Platz kopieren (Tabelle unten)
-- Passwörter, Login und Zertifikat erzeugen
-- alle Dienste einrichten und starten
+The script does everything:
+- installs the packages and the official Spotify client
+- creates the user `spotify`
+- copies the files into place (table below)
+- creates the passwords, login and certificate
+- sets up and starts all services
 
-Am Ende zeigt es die Adresse an. Weiter mit [Erster Start](#erster-start-spotify-anmelden).
+At the end it prints the address. Then continue with [First start](#first-start-log-in-to-spotify).
 
-Ohne `WEB_PASSWORD` oder `VNC_PASSWORD` erzeugt das Skript zufällige Passwörter und gibt sie aus. Die Icecast-Passwörter sind immer zufällig, außer du setzt `ICECAST_SOURCE_PASSWORD` und `ICECAST_ADMIN_PASSWORD`.
+Without `WEB_PASSWORD` or `VNC_PASSWORD` the script generates random passwords and prints them. The Icecast passwords are always random unless you set `ICECAST_SOURCE_PASSWORD` and `ICECAST_ADMIN_PASSWORD`.
 
-### Was das Skript wohin legt
+### Where the script puts things
 
-| Aus dem Repo | Ziel |
+| From the repo | Target |
 |---|---|
 | `player/` | `/opt/player/` |
 | `scripts/run.sh`, `scripts/autoplay.sh` | `/home/spotify/` |
 | `systemd/*.service` | `/etc/systemd/system/` |
-| `sudoers/spotify-web` | `/etc/sudoers.d/spotify-web` (die Weboberfläche darf nur ihre eigenen Dienste starten und stoppen) |
-| `caddy/Caddyfile` | `/etc/caddy/Caddyfile`, Zertifikat in `/etc/caddy/certs/` |
-| `icecast/icecast.xml` | `/etc/icecast2/icecast.xml` (mit Passwörtern) |
-| erzeugt | `/root/spotify.env` (`ICEPW`), `/home/spotify/.weblogin.json`, `/home/spotify/.vncpass` |
+| `sudoers/spotify-web` | `/etc/sudoers.d/spotify-web` (the web interface may only start and stop its own services) |
+| `caddy/Caddyfile` | `/etc/caddy/Caddyfile`, certificate in `/etc/caddy/certs/` |
+| `icecast/icecast.xml` | `/etc/icecast2/icecast.xml` (with passwords) |
+| generated | `/root/spotify.env` (`ICEPW`), `/home/spotify/.weblogin.json`, `/home/spotify/.vncpass` |
 
-Dienste: `icecast2`, `spotify-desktop`, `spotify-enc@aac128` (immer an), `spotify-enc@<format>` (bei Bedarf), `spotify-player-web` und `caddy`.
+Services: `icecast2`, `spotify-desktop`, `spotify-enc@aac128` (always on), `spotify-enc@<format>` (on demand), `spotify-player-web` and `caddy`.
 
 ```bash
 systemctl status spotify-desktop spotify-player-web
 journalctl -u spotify-desktop -f
 ```
 
-Statt LXC geht auch eine normale VM oder ein PC mit Ubuntu 24.04. Das Skript ist dasselbe.
+A regular VM or PC with Ubuntu 24.04 works as well, with the same script.
 
 ---
 
-## Erster Start: Spotify anmelden
+## First start: log in to Spotify
 
-1. Im Heimnetz `http://<IP>:8080` öffnen. Von außen geht es über `https://<adresse>:8443`, dort mit `WEB_USER` und `WEB_PASSWORD` anmelden.
-2. Unten erscheint das Spotify-Fenster. Das **VNC-Passwort** eingeben.
-3. Im Spotify-Fenster auf **Anmelden** klicken. Die Anmeldeseite öffnet sich im Browser Falkon im selben Fenster. Mit deinem Spotify-Konto anmelden.
-4. Einen Song starten und oben **▶ Ton an** drücken.
+1. In the home network open `http://<IP>:8080`. From outside use `https://<address>:8443` and log in with `WEB_USER` and `WEB_PASSWORD`.
+2. The Spotify window appears below. Enter the **VNC password**.
+3. In the Spotify window click **Log in**. The login page opens in the Falkon browser inside the same window. Log in with your Spotify account.
+4. Start a song and click **▶ Sound on** at the top.
 
-Die Anmeldung bleibt gespeichert. Nach einem Neustart spielt Spotify automatisch weiter, wenn es vorher gespielt hat.
+The login is saved. After a restart Spotify resumes playback automatically if it was playing before.
 
-Tipp: In Spotify unter *Einstellungen → Audioqualität* die Streaming-Qualität auf **Sehr hoch** stellen.
+Tip: in Spotify set *Settings → Audio quality → Streaming quality* to **Very high**.
 
 ---
 
-## Bedienung
+## Usage
 
-| Element | Funktion |
+| Control | Function |
 |---|---|
-| ⏮ ⏯ ⏭ | vorheriger Titel, Play/Pause, nächster Titel |
-| **Ton an / aus** | Stream im Browser starten oder stoppen |
-| **Qualität** | Format des Streams (siehe unten) |
-| **Lautstärke** | Lautstärke nur in diesem Browser |
-| **Spotify** | Lautstärke am Server für alle Hörer, bleibt bei jedem Titel erhalten |
-| **Verzögerung** | gemessener Abstand zu Spotify, Klick springt auf „live“ |
-| **Gestreamt** | Datenmenge dieser Sitzung und gesamt (Klick setzt zurück) |
-| **Bild aus / an** | Spotify-Fenster ausblenden (spart Daten) |
-| **Status** | Dienste, Streams, Hörer, Auslastung, Neustart-Knöpfe |
+| ⏮ ⏯ ⏭ | previous track, play/pause, next track |
+| **Sound on / off** | start or stop the stream in this browser |
+| **Quality** | stream format (see below) |
+| **Volume** | volume in this browser only |
+| **Spotify** | server volume for all listeners, kept on every track |
+| **Latency** | measured delay behind Spotify, click to jump to live |
+| **Streamed** | data used this session and in total (click to reset) |
+| **Hide / Show screen** | hide the Spotify window (saves data) |
+| **Status** | services, streams, listeners, load, restart buttons |
 
-### Qualitätsstufen
+### Quality levels
 
-| Auswahl | Datenrate | Verzögerung | Wofür |
+| Option | Data | Latency | Use |
 |---|---|---|---|
-| AAC 128 kbit/s (empfohlen) | ca. 58 MB/h | < 1 s | Standard, auch unterwegs |
-| AAC 192 / 256 kbit/s | ca. 86 / 115 MB/h | < 1 s | beste Qualität im Heimnetz |
-| MP3 128 / 192 / 320 kbit/s | ca. 58 / 86 / 144 MB/h | < 1 s | für ältere Player (z. B. VLC, Radios) |
-| Kompatibel HLS 64 kbit/s | ca. 29 MB/h | 3–6 s | Firmennetz, wenig Daten |
-| Kompatibel HLS 96 kbit/s | ca. 43 MB/h | 3–6 s | Firmennetz |
-| Kompatibel HLS 128 kbit/s | ca. 58 MB/h | 3–6 s | Firmennetz (automatische Wahl) |
+| AAC 128 kbit/s (recommended) | approx. 58 MB/h | < 1 s | default, also on mobile |
+| AAC 192 / 256 kbit/s | approx. 86 / 115 MB/h | < 1 s | best quality at home |
+| MP3 128 / 192 / 320 kbit/s | approx. 58 / 86 / 144 MB/h | < 1 s | older players (e.g. VLC, internet radios) |
+| Compatible HLS 64 kbit/s | approx. 29 MB/h | 3–6 s | corporate network, low data |
+| Compatible HLS 96 kbit/s | approx. 43 MB/h | 3–6 s | corporate network |
+| Compatible HLS 128 kbit/s | approx. 58 MB/h | 3–6 s | corporate network (automatic choice) |
 
-Die Streams lassen sich im Heimnetz auch direkt in VLC oder einem Webradio öffnen: `http://<IP>:8000/aac128`, `/stream` usw.
+In the home network the streams also play directly in VLC or an internet radio: `http://<IP>:8000/aac128`, `/stream` and so on.
 
 ---
 
-## Zugriff von außen
+## Access from the internet
 
-Freigeben wird **nur Port 8443**. Er ist mit HTTPS und Login geschützt. Die Ports 8080, 8000 und 6080 haben keinen Login und gehören nur ins Heimnetz.
+Expose **only port 8443**. It is protected by HTTPS and a login. Ports 8080, 8000 and 6080 have no login and belong in the home network only.
 
-### Variante A: direkt (Portfreigabe)
+### Option A: direct (port forwarding)
 
-Im Router (z. B. FRITZ!Box → Internet → Freigaben) TCP 8443 auf die IP des Servers bzw. Docker-Hosts weiterleiten. Aufruf über die DynDNS-Adresse, z. B. `https://xyz.myfritz.net:8443`.
+In the router (e.g. FRITZ!Box → Internet → Permit Access) forward TCP 8443 to the IP of the server or Docker host. Open it via your dynamic DNS name, e.g. `https://xyz.myfritz.net:8443`.
 
-Das Zertifikat ist selbst signiert. Der Browser warnt deshalb einmal, die Warnung bestätigst du. Wer das nicht will, nimmt Variante B.
+The certificate is self-signed, so the browser warns once and you confirm. If you don't want that, use option B.
 
-### Variante B: hinter einem Reverse Proxy (z. B. Synology)
+### Option B: behind a reverse proxy (e.g. Synology)
 
-Synology DSM → **Systemsteuerung → Anmeldeportal → Erweitert → Reverse Proxy → Erstellen**:
+Synology DSM → **Control Panel → Login Portal → Advanced → Reverse Proxy → Create**:
 
-| Feld | Wert |
+| Field | Value |
 |---|---|
-| Quelle: Protokoll / Hostname / Port | HTTPS / `spotify.deinname.synology.me` / z. B. `9999` |
-| Ziel: Protokoll / Hostname / Port | **HTTPS** / IP des Servers / **8443** |
-| Benutzerdefinierter Header | **Erstellen → WebSocket** (nötig für das Spotify-Fenster) |
+| Source: protocol / hostname / port | HTTPS / `spotify.yourname.synology.me` / e.g. `9999` |
+| Destination: protocol / hostname / port | **HTTPS** / IP of the server / **8443** |
+| Custom header | **Create → WebSocket** (needed for the Spotify window) |
 
-Für den Quell-Hostnamen ein gültiges Zertifikat zuweisen (*Sicherheit → Zertifikat*, z. B. Let's Encrypt). Im Router den Quell-Port auf die Synology weiterleiten.
+Assign a valid certificate to the source hostname (*Security → Certificate*, e.g. Let's Encrypt), and forward the source port in your router to the Synology.
 
-Wichtig ist, dass das Ziel **HTTPS** und Port **8443** ist, nicht 8080. Sonst gibt es keinen Login.
-
----
-
-## Firmennetz und Proxy: Kompatibel-Modus
-
-Viele Firmen-Proxys lassen zwei Dinge nicht durch:
-
-1. **Endlose Downloads.** Der normale Ton ist ein Dauerstream. Der Proxy wartet auf das Ende, um ihn zu prüfen, und das kommt nie. Die Seite bleibt dann bei „verbinde…“ stehen.
-2. **WebSockets.** Darüber überträgt noVNC das Spotify-Fenster. Es erscheint dann „Failed to connect to server“.
-
-Für beides gibt es einen Kompatibel-Modus, der nur normale, kurze HTTPS-Anfragen benutzt. Beide schalten sich über Port 8443 bzw. den Reverse Proxy **automatisch** ein:
-
-- **Ton:** Kommt nach 10 s kein Ton, wechselt die Seite auf *Kompatibel HLS 128 kbit/s*. Der Ton wird dann in 2-Sekunden-Dateien geladen, wie bei Netflix oder YouTube (hls.js). 64 und 96 kbit/s kannst du in der Qualitätsliste wählen.
-- **Bild:** Die Seite testet beim Laden einen WebSocket. Klappt er nicht, zeigt sie das Spotify-Fenster als Bildfolge mit etwa 4 Bildern pro Sekunde.
-  - Klicks, Ziehen, Scrollen und Tastatur werden per HTTPS übertragen, Strg+V fügt Text ein.
-  - Auf dem Handy öffnet der Knopf **Tastatur** die Bildschirmtastatur.
-  - Unten rechts steht dann „Kompatibel-Modus (ohne WebSocket)“.
-
-Bild und Steuerung im Kompatibel-Modus gibt es nur mit gültigem Login. Im Heimnetz auf 8080 bleibt es beim normalen noVNC.
-
-Bitte beachten: Ob du das im Firmennetz nutzen darfst, regeln die IT-Richtlinien deines Arbeitgebers. Manche Firmen sperren solche Seiten per DNS-Filter.
+Make sure the destination is **HTTPS** port **8443**, not 8080. Otherwise there is no login.
 
 ---
 
-## Optional: Geräteauswahl (Spotify Connect)
+## Corporate networks and proxies: compatible mode
 
-Mit der Spotify Web API kannst du in der Weboberfläche wählen, auf welchem Gerät Spotify spielt (Handy, Lautsprecher, dieser Server). Das ist nicht nötig für den Stream. Solange es nicht eingerichtet ist, steht oben nur „Geräteauswahl einrichten“, und es wird nichts abgefragt.
+Many corporate proxies block two things:
 
-1. `http://<IP>:8080/setup.html` öffnen.
-2. Auf [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) eine App anlegen:
-   - Redirect URI genau `http://127.0.0.1:8080/callback`
-   - Web API anhaken
-3. Die **Client ID** auf der Einrichtungsseite eintragen und speichern.
-4. Auf **Anmelden** klicken. Die Spotify-Anmeldung öffnet sich im Spotify-Fenster auf dem Server, dort bestätigen.
+1. **Endless downloads.** The normal audio is a continuous stream. The proxy waits for the end to scan it, which never comes, so the page stays at "connecting...".
+2. **WebSockets.** noVNC uses them for the Spotify window, which then shows "Failed to connect to server".
+
+For both there is a compatible mode that uses only short, ordinary HTTPS requests. Via port 8443 or the reverse proxy both switch on **automatically**:
+
+- **Audio:** if no audio arrives within 10 s, the page switches to *Compatible HLS 128 kbit/s*. Audio is then loaded as 2-second files, the same way Netflix or YouTube work (hls.js). 64 and 96 kbit/s can be chosen in the quality list.
+- **Screen:** on load the page tests a WebSocket. If that fails, it shows the Spotify window as a sequence of images, about 4 per second.
+  - Clicks, dragging, scrolling and keyboard input are sent over HTTPS; Ctrl+V pastes text.
+  - On a phone the **Keyboard** button opens the on-screen keyboard.
+  - The bottom right then reads "Compatible mode (no WebSocket)".
+
+Screen and input in compatible mode require a valid login. In the home network on port 8080 the normal noVNC is used.
+
+Please note: whether you may use this on a corporate network is up to your employer's IT policy. Some companies block such sites with a DNS filter.
 
 ---
 
-## Update
+## Optional: device selection (Spotify Connect)
+
+With the Spotify Web API you can choose in the web interface which device Spotify plays on (phone, speaker, this server). The stream does not need it. Until it is set up, the top bar only shows "Set up device selection" and nothing is polled.
+
+1. Open `http://<IP>:8080/setup.html`.
+2. Create an app at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard):
+   - redirect URI exactly `http://127.0.0.1:8080/callback`
+   - tick Web API
+3. Enter the **Client ID** on the setup page and save.
+4. Click **Log in**. The Spotify login opens in the Spotify window on the server; confirm it there.
+
+---
+
+## Updating
 
 **Docker:**
 ```bash
@@ -319,21 +321,21 @@ git pull
 ./scripts/install-lxc.sh
 ```
 
-Das Skript ersetzt nur die Programmdateien und startet die Dienste neu. Passwörter, Spotify-Anmeldung und Zertifikat bleiben, außer du übergibst neue Passwörter.
+The script only replaces the program files and restarts the services. Passwords, the Spotify login and the certificate are kept, unless you pass new passwords.
 
 ---
 
-## Fehlersuche
+## Troubleshooting
 
-| Problem | Lösung |
+| Problem | Fix |
 |---|---|
-| Spotify-Fenster schwarz | Status → „Spotify-Client neu starten“, oder `systemctl restart spotify-desktop` bzw. `docker exec spotify-homeserver supervisorctl restart desktop` |
-| „verbinde…“, aber kein Ton | Spielt Spotify gerade? Im Firmennetz: Qualität *Kompatibel HLS* wählen. Status zeigt, ob die Encoder laufen. |
-| Ton hakt | AAC 128 oder HLS wählen. Auf der Statusseite CPU prüfen (der Spotify-Client braucht etwa 1 Kern). |
-| „Failed to connect to server“ im Bild | WebSocket blockiert: Seite neu laden, der Kompatibel-Modus greift automatisch. Hinter einem Reverse Proxy den Header *WebSocket* prüfen. |
-| Login auf 8443 klappt nicht | Docker: `WEB_PASSWORD` in `.env` ändern, dann `docker compose up -d`. LXC: `WEB_PASSWORD=neu ./scripts/install-lxc.sh`. |
-| Seite von außen nicht erreichbar | Portfreigabe im Router, DynDNS-Adresse, beim Reverse Proxy Ziel HTTPS:8443. Im Firmennetz ggf. DNS-Sperre. |
-| Spotify zeigt Gerät nicht in Connect | Spotify einmal im Fenster öffnen und abspielen. Der Gerätename ist der Hostname. |
+| Spotify window is black | Status → restart "Spotify client", or `systemctl restart spotify-desktop` or `docker exec spotify-homeserver supervisorctl restart desktop` |
+| "connecting...", but no audio | Is Spotify playing? On a corporate network choose *Compatible HLS*. The status page shows whether the encoders run. |
+| Audio stutters | Choose AAC 128 or HLS. Check CPU on the status page (the Spotify client needs about one core). |
+| "Failed to connect to server" in the screen | WebSocket blocked: reload the page and compatible mode takes over. Behind a reverse proxy check the *WebSocket* header. |
+| Login on 8443 fails | Docker: change `WEB_PASSWORD` in `.env`, then `docker compose up -d`. LXC: `WEB_PASSWORD=new ./scripts/install-lxc.sh`. |
+| Not reachable from outside | Check port forwarding in the router, the dynamic DNS name, and that the reverse proxy targets HTTPS:8443. On a corporate network there may be a DNS block. |
+| Device missing in Spotify Connect | Open Spotify in the window once and play something. The device name is the hostname. |
 
 Logs:
 - **Docker:** `docker compose logs -f`
@@ -341,28 +343,29 @@ Logs:
 
 ---
 
-## Ports, Dateien, Sicherheit
+## Ports, files, security
 
-| Port | Dienst | Login |
+| Port | Service | Login |
 |---|---|---|
-| **8443** | alles über HTTPS (Weboberfläche, Ton, Bild) | **ja**, nur diesen nach außen freigeben |
-| 8080 | Weboberfläche | nein, nur Heimnetz |
-| 8000 | Icecast-Streams | nein, nur Heimnetz |
-| 6080 | noVNC | VNC-Passwort, nur Heimnetz |
+| **8443** | everything over HTTPS (web interface, audio, screen) | **yes**, the only port to expose |
+| 8080 | web interface | no, home network only |
+| 8000 | Icecast streams | no, home network only |
+| 6080 | noVNC | VNC password, home network only |
 
-**Nicht im Repository (Geheimnisse):**
-- Passwörter und der Login-Hash (`/home/spotify/.weblogin.json`)
-- Sitzungen
-- die Spotify-Anmeldung und das Spotify-Profil
-- die Spotify-API-Token
-- der TLS-Schlüssel
+**Not in this repository (secrets):**
+- passwords and the login hash (`/home/spotify/.weblogin.json`)
+- sessions
+- the Spotify login and profile
+- the Spotify API tokens
+- the TLS key
 
-Platzhalter heißen `CHANGE_ME`. `.env` und `*.pem` stehen in `.gitignore`.
+Placeholders are marked `CHANGE_ME`. `.env` and `*.pem` are listed in `.gitignore`.
 
-Jeder Commit wird von GitHub Actions automatisch geprüft (`.github/workflows/docker.yml`). Der Test baut das Image, startet es und prüft:
-- Dienste
-- Ton
+Every commit is checked by GitHub Actions (`.github/workflows/docker.yml`). The test builds the image, starts it and checks:
+- services
+- audio
 - HLS
-- Bild-Modus
-- Login
-- Neustart
+- screen mode
+- login
+- volume
+- restart
