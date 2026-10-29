@@ -2,6 +2,12 @@
 
 Runs the official Spotify desktop client headless on your own server and streams its audio to any browser. A web interface controls everything: play/pause, next/previous, cover art, progress, quality, volume, latency and a status page. You can also see and operate the Spotify window itself in the browser.
 
+| Desktop | Mobile / mini player |
+|---|---|
+| ![Desktop view: controls, quality, volume and the Spotify window](docs/screenshots/desktop.png) | ![Mobile view: cover, progress and controls](docs/screenshots/mobile.png) |
+
+*Both screenshots show the compatible HLS mode on a corporate network (German interface).*
+
 Two variants with identical code:
 
 | | **Docker** | **Proxmox LXC / VM** |
