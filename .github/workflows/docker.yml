@@ -69,6 +69,24 @@ jobs:
           seg=$(grep '^seg' pl.m3u8 | tail -1)
           test "$(curl -sk -b jar -o /dev/null -w '%{size_download}' https://127.0.0.1:8443/hls/$seg)" -gt 10000
 
+      - name: Screen without WebSocket (login required)
+        run: |
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/screen)" = 401
+          curl -sk -b jar -o shot.jpg -w '%{http_code} %{content_type}\n' https://127.0.0.1:8443/api/screen | grep '200 image/jpeg'
+          test "$(stat -c %s shot.jpg)" -gt 5000
+          curl -sk -b jar -fs -X POST -H 'Content-Type: application/json' -d '{"t":"click","x":10,"y":10}' https://127.0.0.1:8443/api/input
+
+      - name: HLS 64 and 96 kbit/s
+        run: |
+          for m in hls64 hls96; do curl -sk -b jar -o /dev/null https://127.0.0.1:8443/$m/live.m3u8 || true; done
+          sleep 12
+          for m in hls64 hls96; do seg=$(curl -sk -b jar https://127.0.0.1:8443/$m/live.m3u8 | grep '^seg' | tail -1); test "$(curl -sk -b jar -o /dev/null -w '%{size_download}' https://127.0.0.1:8443/$m/$seg)" -gt 5000; done
+
+      - name: Spotify volume is kept on the sink
+        run: |
+          curl -fs -X POST -H 'Content-Type: application/json' -d '{"volume":40}' http://127.0.0.1:8080/api/volume
+          curl -fs http://127.0.0.1:8080/api/volume | grep -q '"volume": 40'
+
       - name: Spotify window exists
         run: docker exec -u spotify -e DISPLAY=:1 shs xdotool search --class spotify
 
