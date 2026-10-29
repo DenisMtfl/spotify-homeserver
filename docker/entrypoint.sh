@@ -4,7 +4,7 @@ set -e
 
 : "${ICECAST_SOURCE_PASSWORD:?ICECAST_SOURCE_PASSWORD fehlt (siehe .env.example)}"
 : "${ICECAST_ADMIN_PASSWORD:?ICECAST_ADMIN_PASSWORD fehlt}"
-: "${WEB_USER:=denis}"
+: "${WEB_USER:=admin}"
 : "${WEB_PASSWORD:?WEB_PASSWORD fehlt}"
 : "${VNC_PASSWORD:?VNC_PASSWORD fehlt}"
 export ICEPW="$ICECAST_SOURCE_PASSWORD"
