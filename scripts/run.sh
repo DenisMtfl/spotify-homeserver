@@ -13,9 +13,11 @@ rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
 rm -f $XDG_RUNTIME_DIR/bus
 dbus-daemon --session --address=$DBUS_SESSION_BUS_ADDRESS --fork --nopidfile
-pulseaudio --start --exit-idle-time=-1 --log-target=${PA_LOG_TARGET:-syslog}
+# PulseAudio ohne Hardware-Module: nur die virtuelle Soundkarte "ice", von der ffmpeg aufnimmt
+pulseaudio --start -n --exit-idle-time=-1 --log-target=${PA_LOG_TARGET:-syslog} --load=module-native-protocol-unix
 sleep 1
 pactl load-module module-null-sink sink_name=ice rate=44100 format=float32le channels=2 sink_properties=device.description=ice >/dev/null
+pactl set-default-sink ice
 Xvfb :1 -screen 0 1280x800x24 &
 sleep 2
 openbox &

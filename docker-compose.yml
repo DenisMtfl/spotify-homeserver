@@ -13,8 +13,8 @@ services:
     ports:
       - "8443:8443"                    # HTTPS + Login (nur diesen Port nach aussen freigeben)
       - "8080:8080"                    # Weboberflaeche ohne Login, nur im LAN
-      # - "8000:8000"                  # Icecast direkt (optional, nur LAN)
-      # - "6080:6080"                  # noVNC direkt (optional, nur LAN)
+      - "8000:8000"                    # Icecast direkt, nur LAN (Seite auf 8080 nutzt ihn)
+      - "6080:6080"                    # noVNC direkt, nur LAN (Seite auf 8080 nutzt ihn)
     volumes:
       - spotify-home:/home/spotify     # Spotify-Anmeldung, Login, Zertifikat, Token
 

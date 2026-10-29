@@ -16,6 +16,26 @@ def sink_input():
             m = re.search(r'Volume:[^\n]*?(\d+)%', block)
             return idx, (int(m.group(1)) if m else None)
     return None, None
+# Spotify-Lautstaerke merken: Spotify legt pro Titel einen neuen Audio-Stream an bzw. setzt die
+# Lautstaerke zurueck. Ein Hintergrund-Thread setzt den gewuenschten Wert immer wieder.
+VOLF = os.path.expanduser('~spotify/.spotify_volume')
+def saved_volume():
+    try: return max(0, min(150, int(open(VOLF).read().strip())))
+    except Exception: return None
+def _keep_volume():
+    import threading
+    def loop():
+        while True:
+            time.sleep(1)
+            try:
+                want = saved_volume()
+                if want is None: continue
+                idx, v = sink_input()
+                if idx and v is not None and v != want:
+                    sh('pactl', 'set-sink-input-volume', idx, '%d%%' % want, t=3)
+            except Exception: pass
+    threading.Thread(target=loop, daemon=True).start()
+_keep_volume()
 def meminfo():
     d = {}
     for l in open('/proc/meminfo'):
@@ -66,14 +86,18 @@ def health():
 def get(path):
     if path == '/api/health': return health(), 200
     if path == '/api/volume':
-        idx, v = sink_input(); return ({'volume': v} if idx else {'volume': None}), 200
+        idx, v = sink_input(); w = saved_volume()
+        return ({'volume': w if w is not None else v} if idx else {'volume': None}), 200
     return None
 def post(path, body):
     if path == '/api/volume':
         try: v = max(0, min(150, int(body.get('volume'))))
         except Exception: return {'ok': False}, 400
+        try:
+            with open(VOLF, 'w') as f: f.write(str(v))
+        except Exception: pass
         idx, _ = sink_input()
-        if not idx: return {'ok': False, 'error': 'Spotify spielt gerade nicht'}, 409
+        if not idx: return {'ok': True, 'volume': v, 'saved': True}, 200
         rc, _ = sh('pactl', 'set-sink-input-volume', idx, '%d%%' % v); return {'ok': rc == 0, 'volume': v}, 200
     if path == '/api/restart':
         s = body.get('service')
